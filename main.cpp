@@ -1,7 +1,8 @@
 #include <iostream>
 #include <fstream>
 #include <cstring>
-#include <vector>
+#include <map>
+#include <set>
 #include <algorithm>
 #include <string>
 
@@ -22,86 +23,69 @@ struct Record {
         memset(key, 0, sizeof(key));
         strncpy(key, k.c_str(), MAX_KEY_LEN);
     }
-    
-    bool operator<(const Record& other) const {
-        int cmp = strcmp(key, other.key);
-        if (cmp != 0) return cmp < 0;
-        return value < other.value;
-    }
-    
-    bool operator==(const Record& other) const {
-        return strcmp(key, other.key) == 0 && value == other.value;
-    }
 };
 
 class FileDatabase {
 private:
-    vector<Record> loadAll() {
-        vector<Record> records;
+    map<string, set<int>> data;
+    
+    void loadFromFile() {
         ifstream file(DB_FILE, ios::binary);
         if (!file.is_open()) {
-            return records;
+            return;
         }
         
         Record rec;
         while (file.read((char*)&rec, sizeof(Record))) {
-            records.push_back(rec);
+            data[string(rec.key)].insert(rec.value);
         }
         file.close();
-        return records;
     }
     
-    void saveAll(const vector<Record>& records) {
+    void saveToFile() {
         ofstream file(DB_FILE, ios::binary | ios::trunc);
-        for (const auto& rec : records) {
-            file.write((const char*)&rec, sizeof(Record));
+        for (const auto& pair : data) {
+            for (int value : pair.second) {
+                Record rec(pair.first, value);
+                file.write((const char*)&rec, sizeof(Record));
+            }
         }
         file.close();
     }
     
 public:
+    FileDatabase() {
+        loadFromFile();
+    }
+    
+    ~FileDatabase() {
+        saveToFile();
+    }
+    
     void insert(const string& key, int value) {
-        vector<Record> records = loadAll();
-        Record newRec(key, value);
-        
-        // Check if already exists
-        if (std::find(records.begin(), records.end(), newRec) != records.end()) {
-            return; // Already exists, don't insert
-        }
-        
-        records.push_back(newRec);
-        sort(records.begin(), records.end());
-        saveAll(records);
+        data[key].insert(value);
     }
     
     void remove(const string& key, int value) {
-        vector<Record> records = loadAll();
-        Record target(key, value);
-        
-        auto it = std::find(records.begin(), records.end(), target);
-        if (it != records.end()) {
-            records.erase(it);
-            saveAll(records);
+        auto it = data.find(key);
+        if (it != data.end()) {
+            it->second.erase(value);
+            if (it->second.empty()) {
+                data.erase(it);
+            }
         }
     }
     
     void findKey(const string& key) {
-        vector<Record> records = loadAll();
-        vector<int> values;
-        
-        for (const auto& rec : records) {
-            if (strcmp(rec.key, key.c_str()) == 0) {
-                values.push_back(rec.value);
-            }
-        }
-        
-        if (values.empty()) {
+        auto it = data.find(key);
+        if (it == data.end() || it->second.empty()) {
             cout << "null" << endl;
         } else {
-            sort(values.begin(), values.end());
-            for (size_t i = 0; i < values.size(); i++) {
-                if (i > 0) cout << " ";
-                cout << values[i];
+            bool first = true;
+            for (int value : it->second) {
+                if (!first) cout << " ";
+                cout << value;
+                first = false;
             }
             cout << endl;
         }
