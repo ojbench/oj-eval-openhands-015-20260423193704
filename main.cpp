@@ -1,0 +1,142 @@
+#include <iostream>
+#include <fstream>
+#include <cstring>
+#include <vector>
+#include <algorithm>
+#include <string>
+
+using namespace std;
+
+const char* DB_FILE = "database.dat";
+const int MAX_KEY_LEN = 64;
+
+struct Record {
+    char key[MAX_KEY_LEN + 1];
+    int value;
+    
+    Record() : value(0) {
+        memset(key, 0, sizeof(key));
+    }
+    
+    Record(const string& k, int v) : value(v) {
+        memset(key, 0, sizeof(key));
+        strncpy(key, k.c_str(), MAX_KEY_LEN);
+    }
+    
+    bool operator<(const Record& other) const {
+        int cmp = strcmp(key, other.key);
+        if (cmp != 0) return cmp < 0;
+        return value < other.value;
+    }
+    
+    bool operator==(const Record& other) const {
+        return strcmp(key, other.key) == 0 && value == other.value;
+    }
+};
+
+class FileDatabase {
+private:
+    vector<Record> loadAll() {
+        vector<Record> records;
+        ifstream file(DB_FILE, ios::binary);
+        if (!file.is_open()) {
+            return records;
+        }
+        
+        Record rec;
+        while (file.read((char*)&rec, sizeof(Record))) {
+            records.push_back(rec);
+        }
+        file.close();
+        return records;
+    }
+    
+    void saveAll(const vector<Record>& records) {
+        ofstream file(DB_FILE, ios::binary | ios::trunc);
+        for (const auto& rec : records) {
+            file.write((const char*)&rec, sizeof(Record));
+        }
+        file.close();
+    }
+    
+public:
+    void insert(const string& key, int value) {
+        vector<Record> records = loadAll();
+        Record newRec(key, value);
+        
+        // Check if already exists
+        if (std::find(records.begin(), records.end(), newRec) != records.end()) {
+            return; // Already exists, don't insert
+        }
+        
+        records.push_back(newRec);
+        sort(records.begin(), records.end());
+        saveAll(records);
+    }
+    
+    void remove(const string& key, int value) {
+        vector<Record> records = loadAll();
+        Record target(key, value);
+        
+        auto it = std::find(records.begin(), records.end(), target);
+        if (it != records.end()) {
+            records.erase(it);
+            saveAll(records);
+        }
+    }
+    
+    void findKey(const string& key) {
+        vector<Record> records = loadAll();
+        vector<int> values;
+        
+        for (const auto& rec : records) {
+            if (strcmp(rec.key, key.c_str()) == 0) {
+                values.push_back(rec.value);
+            }
+        }
+        
+        if (values.empty()) {
+            cout << "null" << endl;
+        } else {
+            sort(values.begin(), values.end());
+            for (size_t i = 0; i < values.size(); i++) {
+                if (i > 0) cout << " ";
+                cout << values[i];
+            }
+            cout << endl;
+        }
+    }
+};
+
+int main() {
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+    
+    int n;
+    cin >> n;
+    
+    FileDatabase db;
+    
+    for (int i = 0; i < n; i++) {
+        string cmd;
+        cin >> cmd;
+        
+        if (cmd == "insert") {
+            string key;
+            int value;
+            cin >> key >> value;
+            db.insert(key, value);
+        } else if (cmd == "delete") {
+            string key;
+            int value;
+            cin >> key >> value;
+            db.remove(key, value);
+        } else if (cmd == "find") {
+            string key;
+            cin >> key;
+            db.findKey(key);
+        }
+    }
+    
+    return 0;
+}
