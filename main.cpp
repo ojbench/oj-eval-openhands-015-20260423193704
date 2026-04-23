@@ -8,7 +8,7 @@
 
 using namespace std;
 
-const int NUM_FILES = 16;
+const int NUM_FILES = 64;
 const int MAX_KEY_LEN = 64;
 
 struct Record {
@@ -78,14 +78,14 @@ private:
     
     bool shouldCompact(const string& filename) {
         vector<Record> records = loadFile(filename);
-        if (records.size() < 100) return false;
+        if (records.size() < 50) return false;
         
         int deleted_count = 0;
         for (const auto& rec : records) {
             if (rec.deleted) deleted_count++;
         }
         
-        return deleted_count > records.size() / 3;
+        return deleted_count > records.size() / 4;
     }
     
 public:
