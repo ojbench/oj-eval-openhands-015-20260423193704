@@ -2,6 +2,7 @@
 #include <fstream>
 #include <cstring>
 #include <vector>
+#include <map>
 #include <algorithm>
 #include <string>
 #include <functional>
@@ -76,6 +77,24 @@ private:
         saveFile(filename, active);
     }
     
+    void compactFileRemoveDuplicates(const string& filename) {
+        vector<Record> records = loadFile(filename);
+        map<pair<string, int>, bool> seen;
+        vector<Record> unique_records;
+        
+        for (const auto& rec : records) {
+            if (!rec.deleted) {
+                pair<string, int> key_val = make_pair(string(rec.key), rec.value);
+                if (seen.find(key_val) == seen.end()) {
+                    seen[key_val] = true;
+                    unique_records.push_back(rec);
+                }
+            }
+        }
+        
+        saveFile(filename, unique_records);
+    }
+    
     bool shouldCompact(const string& filename) {
         vector<Record> records = loadFile(filename);
         if (records.size() < 50) return false;
@@ -95,6 +114,13 @@ public:
         // Just append without checking for duplicates
         // Duplicates will be handled during find operations
         appendRecord(filename, Record(key, value, false));
+        
+        // Periodically compact to remove duplicates and keep file size manageable
+        static int insert_count = 0;
+        insert_count++;
+        if (insert_count % 1000 == 0) {
+            compactFileRemoveDuplicates(filename);
+        }
     }
     
     void remove(const string& key, int value) {
