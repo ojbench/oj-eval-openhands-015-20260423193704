@@ -7,3 +7,4 @@ code
 *.dat
 *.bin
 submission_ids.log
+db_*.dat

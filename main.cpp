@@ -1,25 +1,26 @@
 #include <iostream>
 #include <fstream>
 #include <cstring>
-#include <map>
-#include <set>
+#include <vector>
 #include <algorithm>
 #include <string>
+#include <functional>
 
 using namespace std;
 
-const char* DB_FILE = "database.dat";
+const int NUM_FILES = 16;
 const int MAX_KEY_LEN = 64;
 
 struct Record {
     char key[MAX_KEY_LEN + 1];
     int value;
+    bool deleted;
     
-    Record() : value(0) {
+    Record() : value(0), deleted(false) {
         memset(key, 0, sizeof(key));
     }
     
-    Record(const string& k, int v) : value(v) {
+    Record(const string& k, int v, bool del = false) : value(v), deleted(del) {
         memset(key, 0, sizeof(key));
         strncpy(key, k.c_str(), MAX_KEY_LEN);
     }
@@ -27,65 +28,89 @@ struct Record {
 
 class FileDatabase {
 private:
-    map<string, set<int>> data;
+    string getFileName(const string& key) {
+        hash<string> hasher;
+        size_t h = hasher(key) % NUM_FILES;
+        return "db_" + to_string(h) + ".dat";
+    }
     
-    void loadFromFile() {
-        ifstream file(DB_FILE, ios::binary);
+    vector<Record> loadFile(const string& filename) {
+        vector<Record> records;
+        ifstream file(filename, ios::binary);
         if (!file.is_open()) {
-            return;
+            return records;
         }
         
         Record rec;
         while (file.read((char*)&rec, sizeof(Record))) {
-            data[string(rec.key)].insert(rec.value);
+            if (!rec.deleted) {
+                records.push_back(rec);
+            }
         }
         file.close();
+        return records;
     }
     
-    void saveToFile() {
-        ofstream file(DB_FILE, ios::binary | ios::trunc);
-        for (const auto& pair : data) {
-            for (int value : pair.second) {
-                Record rec(pair.first, value);
-                file.write((const char*)&rec, sizeof(Record));
-            }
+    void saveFile(const string& filename, const vector<Record>& records) {
+        ofstream file(filename, ios::binary | ios::trunc);
+        for (const auto& rec : records) {
+            file.write((const char*)&rec, sizeof(Record));
         }
         file.close();
     }
     
 public:
-    FileDatabase() {
-        loadFromFile();
-    }
-    
-    ~FileDatabase() {
-        saveToFile();
-    }
-    
     void insert(const string& key, int value) {
-        data[key].insert(value);
+        string filename = getFileName(key);
+        vector<Record> records = loadFile(filename);
+        
+        // Check if already exists
+        for (const auto& rec : records) {
+            if (strcmp(rec.key, key.c_str()) == 0 && rec.value == value) {
+                return; // Already exists
+            }
+        }
+        
+        records.push_back(Record(key, value));
+        saveFile(filename, records);
     }
     
     void remove(const string& key, int value) {
-        auto it = data.find(key);
-        if (it != data.end()) {
-            it->second.erase(value);
-            if (it->second.empty()) {
-                data.erase(it);
+        string filename = getFileName(key);
+        vector<Record> records = loadFile(filename);
+        
+        bool found = false;
+        for (auto it = records.begin(); it != records.end(); ++it) {
+            if (strcmp(it->key, key.c_str()) == 0 && it->value == value) {
+                records.erase(it);
+                found = true;
+                break;
             }
+        }
+        
+        if (found) {
+            saveFile(filename, records);
         }
     }
     
     void findKey(const string& key) {
-        auto it = data.find(key);
-        if (it == data.end() || it->second.empty()) {
+        string filename = getFileName(key);
+        vector<Record> records = loadFile(filename);
+        vector<int> values;
+        
+        for (const auto& rec : records) {
+            if (strcmp(rec.key, key.c_str()) == 0) {
+                values.push_back(rec.value);
+            }
+        }
+        
+        if (values.empty()) {
             cout << "null" << endl;
         } else {
-            bool first = true;
-            for (int value : it->second) {
-                if (!first) cout << " ";
-                cout << value;
-                first = false;
+            sort(values.begin(), values.end());
+            for (size_t i = 0; i < values.size(); i++) {
+                if (i > 0) cout << " ";
+                cout << values[i];
             }
             cout << endl;
         }
