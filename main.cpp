@@ -79,16 +79,27 @@ private:
     
     void compactFileRemoveDuplicates(const string& filename) {
         vector<Record> records = loadFile(filename);
-        map<pair<string, int>, bool> seen;
-        vector<Record> unique_records;
+        vector<Record> active;
         
+        // Filter out deleted records
         for (const auto& rec : records) {
             if (!rec.deleted) {
-                pair<string, int> key_val = make_pair(string(rec.key), rec.value);
-                if (seen.find(key_val) == seen.end()) {
-                    seen[key_val] = true;
-                    unique_records.push_back(rec);
-                }
+                active.push_back(rec);
+            }
+        }
+        
+        // Sort records
+        sort(active.begin(), active.end(), [](const Record& a, const Record& b) {
+            int cmp = strcmp(a.key, b.key);
+            if (cmp != 0) return cmp < 0;
+            return a.value < b.value;
+        });
+        
+        // Remove duplicates
+        vector<Record> unique_records;
+        for (size_t i = 0; i < active.size(); i++) {
+            if (i == 0 || strcmp(active[i].key, active[i-1].key) != 0 || active[i].value != active[i-1].value) {
+                unique_records.push_back(active[i]);
             }
         }
         
