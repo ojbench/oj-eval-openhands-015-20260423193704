@@ -8,7 +8,7 @@
 
 using namespace std;
 
-const int NUM_FILES = 64;
+const int NUM_FILES = 16;
 const int MAX_KEY_LEN = 64;
 
 struct Record {
@@ -91,22 +91,10 @@ private:
 public:
     void insert(const string& key, int value) {
         string filename = getFileName(key);
-        vector<Record> records = loadFile(filename);
         
-        // Check if already exists
-        for (const auto& rec : records) {
-            if (!rec.deleted && strcmp(rec.key, key.c_str()) == 0 && rec.value == value) {
-                return; // Already exists
-            }
-        }
-        
-        // Append new record
+        // Just append without checking for duplicates
+        // Duplicates will be handled during find operations
         appendRecord(filename, Record(key, value, false));
-        
-        // Compact if needed
-        if (shouldCompact(filename)) {
-            compactFile(filename);
-        }
     }
     
     void remove(const string& key, int value) {
@@ -114,11 +102,12 @@ public:
         vector<Record> records = loadFile(filename);
         
         bool found = false;
+        // Mark ALL matching records as deleted (to handle duplicates)
         for (auto& rec : records) {
             if (!rec.deleted && strcmp(rec.key, key.c_str()) == 0 && rec.value == value) {
                 rec.deleted = true;
                 found = true;
-                break;
+                // Don't break - mark all duplicates
             }
         }
         
@@ -141,7 +130,10 @@ public:
         if (values.empty()) {
             cout << "null" << endl;
         } else {
+            // Remove duplicates and sort
             sort(values.begin(), values.end());
+            values.erase(unique(values.begin(), values.end()), values.end());
+            
             for (size_t i = 0; i < values.size(); i++) {
                 if (i > 0) cout << " ";
                 cout << values[i];
