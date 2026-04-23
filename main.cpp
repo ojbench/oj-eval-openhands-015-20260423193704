@@ -43,9 +43,7 @@ private:
         
         Record rec;
         while (file.read((char*)&rec, sizeof(Record))) {
-            if (!rec.deleted) {
-                records.push_back(rec);
-            }
+            records.push_back(rec);
         }
         file.close();
         return records;
@@ -59,6 +57,37 @@ private:
         file.close();
     }
     
+    void appendRecord(const string& filename, const Record& rec) {
+        ofstream file(filename, ios::binary | ios::app);
+        file.write((const char*)&rec, sizeof(Record));
+        file.close();
+    }
+    
+    void compactFile(const string& filename) {
+        vector<Record> records = loadFile(filename);
+        vector<Record> active;
+        
+        for (const auto& rec : records) {
+            if (!rec.deleted) {
+                active.push_back(rec);
+            }
+        }
+        
+        saveFile(filename, active);
+    }
+    
+    bool shouldCompact(const string& filename) {
+        vector<Record> records = loadFile(filename);
+        if (records.size() < 100) return false;
+        
+        int deleted_count = 0;
+        for (const auto& rec : records) {
+            if (rec.deleted) deleted_count++;
+        }
+        
+        return deleted_count > records.size() / 3;
+    }
+    
 public:
     void insert(const string& key, int value) {
         string filename = getFileName(key);
@@ -66,13 +95,18 @@ public:
         
         // Check if already exists
         for (const auto& rec : records) {
-            if (strcmp(rec.key, key.c_str()) == 0 && rec.value == value) {
+            if (!rec.deleted && strcmp(rec.key, key.c_str()) == 0 && rec.value == value) {
                 return; // Already exists
             }
         }
         
-        records.push_back(Record(key, value));
-        saveFile(filename, records);
+        // Append new record
+        appendRecord(filename, Record(key, value, false));
+        
+        // Compact if needed
+        if (shouldCompact(filename)) {
+            compactFile(filename);
+        }
     }
     
     void remove(const string& key, int value) {
@@ -80,9 +114,9 @@ public:
         vector<Record> records = loadFile(filename);
         
         bool found = false;
-        for (auto it = records.begin(); it != records.end(); ++it) {
-            if (strcmp(it->key, key.c_str()) == 0 && it->value == value) {
-                records.erase(it);
+        for (auto& rec : records) {
+            if (!rec.deleted && strcmp(rec.key, key.c_str()) == 0 && rec.value == value) {
+                rec.deleted = true;
                 found = true;
                 break;
             }
@@ -99,7 +133,7 @@ public:
         vector<int> values;
         
         for (const auto& rec : records) {
-            if (strcmp(rec.key, key.c_str()) == 0) {
+            if (!rec.deleted && strcmp(rec.key, key.c_str()) == 0) {
                 values.push_back(rec.value);
             }
         }
